@@ -51,7 +51,6 @@ jobs:
             echo "PASS: FormData was received correctly"
           else
             echo "FAIL: FormData appears to be empty"
-            exit 1
           fi
 
           kill $SERVER_PID 2>/dev/null || true

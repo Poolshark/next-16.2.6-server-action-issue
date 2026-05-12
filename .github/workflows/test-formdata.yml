@@ -1,0 +1,57 @@
+name: Test FormData Bug
+on: [push]
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install
+      - run: npm run build
+      - name: Start server and test FormData
+        shell: bash
+        run: |
+          npx next start &
+          SERVER_PID=$!
+
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+          # Get the page HTML to extract the action ID
+          HTML=$(curl -s http://localhost:3000)
+
+          # Submit the form via POST
+          RESPONSE=$(curl -s -X POST http://localhost:3000 \
+            -H "Content-Type: multipart/form-data" \
+            -H "Next-Action: $(echo "$HTML" | grep -oP '(?<=\$ACTION_ID_)[a-f0-9]+'| head -1)" \
+            -F "1_test-field=hello" \
+            -F "0=\$ACTION_REF_1")
+
+          echo "=== Environment ==="
+          echo "OS: ${{ matrix.os }}"
+          echo "Node: $(node --version)"
+          echo "Next.js: $(npx next --version)"
+          echo ""
+          echo "=== Response ==="
+          echo "$RESPONSE"
+
+          # Check if the response contains "hello"
+          if echo "$RESPONSE" | grep -q "hello"; then
+            echo "PASS: FormData was received correctly"
+          else
+            echo "FAIL: FormData appears to be empty"
+            exit 1
+          fi
+
+          kill $SERVER_PID 2>/dev/null || true
